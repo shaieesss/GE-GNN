@@ -128,7 +128,7 @@ def normalize(mx):
 	r_mat_inv = sp.diags(r_inv)
 	mx = r_mat_inv.dot(mx)
 	return mx
-class H2FDetector_layer(nn.Module):
+class H_layer(nn.Module):
     def __init__(self, input_dim, output_dim, head, relation_aware, etype, dropout, if_sum=False):
         super().__init__()
         self.etype = etype
@@ -229,7 +229,7 @@ class RelationAware(nn.Module):
         return edge_sum
 
 
-class MultiRelationH2FDetectorLayer(nn.Module):
+class MultiRelationGE_GNNLayer(nn.Module):
     def __init__(self, input_dim, output_dim, head, dataset, dropout, if_sum=False):
         super().__init__()
         self.relation = copy.deepcopy(dataset.etypes)
@@ -252,7 +252,7 @@ class MultiRelationH2FDetectorLayer(nn.Module):
         for e in self.relation:
             self.sublayer = nn.ModuleList()
             self.minelayers[e] = self.sublayer
-            self.sublayer.append(H2FDetector_layer(input_dim, output_dim, head, self.relation_aware, e, dropout, if_sum))
+            self.sublayer.append(H_layer(input_dim, output_dim, head, self.relation_aware, e, dropout, if_sum))
             self.sublayer.append(Gate(head, output_dim, dropout, if_sum))
     
     def forward(self, g, h):
@@ -302,7 +302,7 @@ class MultiRelationH2FDetectorLayer(nn.Module):
             
 
 
-class H2FDetector(nn.Module):
+class GE_GNN(nn.Module):
     def __init__(self, args, g):
         super().__init__()
         self.n_layer = args.n_layer
@@ -314,12 +314,12 @@ class H2FDetector(nn.Module):
         self.n_layer = args.n_layer
         self.mine_layers = nn.ModuleList()
         if args.n_layer == 1:
-            self.mine_layers.append(MultiRelationH2FDetectorLayer(self.input_dim, self.n_class, args.head, g, args.dropout, if_sum=True))
+            self.mine_layers.append(MultiRelationGE_GNNLayer(self.input_dim, self.n_class, args.head, g, args.dropout, if_sum=True))
         else:
-            self.mine_layers.append(MultiRelationH2FDetectorLayer(self.input_dim, self.intra_dim, args.head, g, args.dropout))
+            self.mine_layers.append(MultiRelationGE_GNNLayer(self.input_dim, self.intra_dim, args.head, g, args.dropout))
             for _ in range(1, self.n_layer-1):
-                self.mine_layers.append(MultiRelationH2FDetectorLayer(self.intra_dim*args.head, self.intra_dim, args.head, g, args.dropout))
-            self.mine_layers.append(MultiRelationH2FDetectorLayer(self.intra_dim*args.head, self.n_class, args.head, g, args.dropout, if_sum=True))
+                self.mine_layers.append(MultiRelationGE_GNNLayer(self.intra_dim*args.head, self.intra_dim, args.head, g, args.dropout))
+            self.mine_layers.append(MultiRelationGE_GNNLayer(self.intra_dim*args.head, self.n_class, args.head, g, args.dropout, if_sum=True))
         self.dropout = nn.Dropout(args.dropout)
         self.relu = nn.ReLU()
 
@@ -384,7 +384,7 @@ dataset = dataset.to(device)
 # train model
 '''
 print('Start training model...')
-model = H2FDetector(args, dataset)
+model = GE_GNN(args, dataset)
 model = model.to(device)
 optimizer = optim.Adam(params=model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 early_stop = EarlyStop(args.early_stop)
